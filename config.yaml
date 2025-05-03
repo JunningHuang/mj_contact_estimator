@@ -1,0 +1,13 @@
+# Parameters for the high gain based observer
+bandwidth: 
+  - hg: 200
+  - sliding: 45
+  - mixing: 40
+
+hg_alg: hg # hg, sliding, mixing
+
+# Parameters for the disturbance kalman filter
+P_init: 1
+Q: 1
+R: 0.001
+
