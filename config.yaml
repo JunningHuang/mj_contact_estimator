@@ -1,8 +1,8 @@
 # Parameters for the high gain based observer
 bandwidth: 
   - hg: 200
-  - sliding: 45
-  - mixing: 40
+  - sliding: 30
+  - mixing: 30
 
 hg_alg: hg # hg, sliding, mixing
 

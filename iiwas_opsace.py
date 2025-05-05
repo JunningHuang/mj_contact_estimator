@@ -102,6 +102,7 @@ def main() -> None:
     gt_gms = []
     est_ext_taus = []
     gt_ext_taus = []
+    computed_ext_wrenchs = []
 
     with mujoco.viewer.launch_passive(
         model=model,
@@ -140,7 +141,7 @@ def main() -> None:
             else:
                 Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
 
-            # Compute the dense mass matrix using MuJoCo
+            # Compute the dense mass matrix using MuJoCo 
             M = np.zeros((model.nv, model.nv))  # Pre-allocate the dense matrix
             mujoco.mj_forward(model, data) # Warning: don't forget to call mj_forward before mj_fullM
                                            # to update the dynamics state                      
@@ -199,6 +200,8 @@ def main() -> None:
             gt_ext_tau = tau_total - tau
             gt_ext_taus.append(gt_ext_tau.copy())
             est_ext_taus.append(est_ext_tau.copy())
+            computed_ext_wrench = np.linalg.pinv(jac_body.T) @ gt_ext_tau
+            computed_ext_wrenchs.append(computed_ext_wrench.copy())
 
             viewer.sync()
             time_until_next_step = dt - (time.time() - step_start)
@@ -212,6 +215,8 @@ def main() -> None:
     gt_ext_wrenches = np.array(gt_ext_wrenches)
     gt_gms = np.array(gt_gms)
     gt_ext_taus = np.array(gt_ext_taus)
+    computed_ext_wrenchs = np.array(computed_ext_wrenchs)
+    
     import matplotlib.pyplot as plt
     fig = plt.figure(figsize=(10, 5))
     plot_param = 611
@@ -221,6 +226,7 @@ def main() -> None:
         ax = fig.add_subplot(plot_param)
         ax.plot(t, est_ext_wrenches[:, i], label=f"Estimated External {axs_name[i]}")
         ax.plot(t, gt_ext_wrenches[:, i], label=f"Ground Truth External {axs_name[i]}")
+        ax.plot(t, computed_ext_wrenchs[:, i], label=f"Computed External Torque {axs_name[i]}")
         ax.legend()
         plot_param += 1
 
