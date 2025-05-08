@@ -19,18 +19,17 @@ def compute_gravity_forces(model: mujoco.MjModel, data: mujoco.MjData) -> np.nda
     qvel_backup = data.qvel.copy()
     qacc_backup = data.qacc.copy()
 
-    # Ensure valid qpos
-    mujoco.mj_forward(model, data)
-
     # Set velocities and accelerations to zero
     data.qvel[:] = 0
     data.qacc[:] = 0
 
-    # Allocate output
-    g = np.zeros(nv)
+    # Ensure valid qpos
+    mujoco.mj_forward(model, data)
 
     # Compute full inverse dynamics: gravity only when vel and acc = 0
-    mujoco.mj_rne(model, data, 1, g)  # 1 = include gravity
+    g = np.zeros(nv)
+    mujoco.mj_rne(model, data, 0, g)  # 1 = include gravity
+    g = data.qfrc_bias.copy()
 
     # Restore original state
     data.qpos[:] = qpos_backup
@@ -40,44 +39,43 @@ def compute_gravity_forces(model: mujoco.MjModel, data: mujoco.MjData) -> np.nda
 
     return g
 
-def compute_coriolis_matrix(model: mujoco.MjModel, data: mujoco.MjData) -> np.ndarray:
+def compute_joint_space_inertia_matrix(model: mujoco.MjModel, data: mujoco.MjData) -> np.ndarray:
     """
-    Compute the Coriolis + centrifugal matrix C(q, qdot) such that:
-        c(q, qdot) = C(q, qdot) * qdot
-    using finite differences and MuJoCo's mj_rne().
+    Compute the joint space inertia matrix M(q) using MuJoCo's mj_rne().
 
     Returns:
-        C: Coriolis matrix of shape (nv, nv)
+        M: Joint space inertia matrix of shape (nv, nv)
     """
-    nv = model.nv
-    C = np.zeros((nv, nv))
+    M = np.zeros((model.nv, model.nv))  # Pre-allocate the dense matrix
+    mujoco.mj_forward(model, data) # Warning: don't forget to call mj_forward before mj_fullM
+                                    # to update the dynamics state                      
+    mujoco.mj_fullM(model, M, data.qM)
+    return M
 
-    # Backup state
-    qpos_backup = data.qpos.copy()
-    qvel_backup = data.qvel.copy()
-    qacc_backup = data.qacc.copy()
+class mujocoDyn:
+    """
+    Class to compute generalized gravity forces and Coriolis matrix using MuJoCo.
+    
+    Args:
+        model: mujoco.MjModel
+        data: mujoco.MjData
+    """
+    def __init__(self, model: mujoco.MjModel, data: mujoco.MjData):
+        self.model = model
+        self.data = data
+        self.nv = model.nv
 
-    # Loop over unit vectors in velocity space
-    for i in range(nv):
-        # Reset velocities and accelerations
-        data.qvel[:] = 0
-        data.qacc[:] = 0
-        mujoco.mj_forward(model, data)
-
-        # Set unit velocity in i-th direction
-        data.qvel[i] = 1.0
-
-        # Compute c_i = C * e_i (i.e., i-th column of C)
-        c_i = np.zeros(nv)
-        mujoco.mj_rne(model, data, 0, c_i)  # exclude gravity (0)
-
-        # Fill i-th column of C
-        C[:, i] = c_i
-
-    # Restore state
-    data.qpos[:] = qpos_backup
-    data.qvel[:] = qvel_backup
-    data.qacc[:] = qacc_backup
-    mujoco.mj_forward(model, data)
-
-    return C
+    def compute_all_forces(self):
+        # TODO: Implement the function to compute the coriolis matrix
+        """
+        Compute all forces including gravity and Coriolis forces.
+        
+        Returns:
+            g: Gravity torque vector of shape (nv,)
+            M: Joint space inertia matrix of shape (nv, nv)
+            C: Coriolis matrix of shape (nv, nv)
+        """
+        
+        g = compute_gravity_forces(self.model, self.data)
+        M = compute_joint_space_inertia_matrix(self.model, self.data)
+        return g, M

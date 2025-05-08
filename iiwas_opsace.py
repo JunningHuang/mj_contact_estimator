@@ -4,7 +4,8 @@ import numpy as np
 import time
 import pinocchio as pino
 from contact_estimator import high_gain_based_observer, kalman_disturbance_observer
-from mujoco_dyn import compute_gravity_forces
+from mujoco_dyn import mujocoDyn
+from external_wrench import WrenchApplier
 
 # Cartesian impedance control gains.
 impedance_pos = np.asarray([100.0, 100.0, 100.0])  # [N/m]
@@ -103,6 +104,11 @@ def main() -> None:
     est_ext_taus = []
     gt_ext_taus = []
     computed_ext_wrenchs = []
+    
+    # Generate a wrench profile
+    apply_body_names = ["link6", "attachment"]
+    wrench_applier = WrenchApplier(model, data, "sine", time_stop=2.0, dt=dt, body_names=apply_body_names)
+    mujoco_dyn = mujocoDyn(model, data)
 
     with mujoco.viewer.launch_passive(
         model=model,
@@ -141,16 +147,13 @@ def main() -> None:
             else:
                 Mx = np.linalg.pinv(Mx_inv, rcond=1e-2)
 
-            # Compute the dense mass matrix using MuJoCo 
-            M = np.zeros((model.nv, model.nv))  # Pre-allocate the dense matrix
-            mujoco.mj_forward(model, data) # Warning: don't forget to call mj_forward before mj_fullM
-                                           # to update the dynamics state                      
-            mujoco.mj_fullM(model, M, data.qM)
+            # Apply external wrench to the end-effector.
+            applied_external_wrench = wrench_applier.apply_wrench()
             
             # Compute the Coriolis matrix with pinocchio
             C_pino = pino.computeCoriolisMatrix(pino_model, pino_data, data.qpos, data.qvel) 
-            # Compute the Gravitry vector with MuJoCo
-            g = compute_gravity_forces(model, data)
+            # Compute all dynamic matrixes with MuJoCo
+            g, M = mujoco_dyn.compute_all_forces()
             
             # Compute generalized forces.
             tau = jac.T @ Mx @ (Kp * twist - Kd * (jac @ data.qvel[dof_ids]))
